@@ -162,13 +162,13 @@ class ShakeDetector:
 
     def __init__(
         self,
-        ema_alpha: float = 0.35,        # smoothing for center-Y
+        ema_alpha: float = 0.5,         # higher alpha for snappier tracking of fast motion
         vel_deadzone: float = 0.0008,   # ignore tiny velocity jitter
         rel_amp_frac: float = 0.12,     # min ΔY vs hand bbox height
         min_abs_amp: float = 0.015,     # absolute floor for ΔY (normalized)
-        min_frames_between_extrema: int = 4,
+        min_frames_between_extrema: int = 2,  # allow shorter gaps between peaks
         max_frames_between_extrema: int = 50,
-        settle_frames_after_extrema: int = 6,
+        settle_frames_after_extrema: int = 4,  # quicker settle time after last shake
         target_cycles: int = 3,         # keep 3 shakes to trigger throw (tune as needed)
     ):
         self.ema_alpha = ema_alpha
@@ -325,12 +325,20 @@ class RPSController:
     def run(self):
         vote_window = deque(maxlen=7)  # ~200ms at 30fps
         prev_shakes = 0
-        inactivity_reset_sec = 2.0
+        reset_time = None  # when not None, reset detector after this timestamp
 
         while True:
             ok, frame = self.cap.read()
             if not ok:
                 break
+
+            # deferred reset after completed handshake
+            if reset_time is not None and time.time() >= reset_time:
+                self.detector.reset()
+                prev_shakes = 0
+                reset_time = None
+                self.set_state("idle")
+
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             res = self.hands.process(rgb)
 
@@ -354,16 +362,7 @@ class RPSController:
                         "ts": now_ts(),
                     })
 
-                # Inactivity reset (no motion for N seconds after shakes began)
-                if self.detector.shakes > 0 and self.detector.seconds_since_motion() >= inactivity_reset_sec:
-                    self.detector.reset()
-                    vote_window.clear()
-                    self.arm.send_json({
-                        "cmd": "info",
-                        "message": "Handshake count reset",
-                        "ts": now_ts(),
-                    })
-                    self.set_state("idle")
+                # Inactivity reset disabled; handshake count persists until manual reset
 
                 # classify continuously (we'll only act on it on 3rd shake)
                 guess = self.classifier.classify(hand_landmarks, h, w)
@@ -371,12 +370,13 @@ class RPSController:
                     vote_window.append(guess)
 
             # State machine
-            if self.detector.shakes > 0:
-                self.set_state("shaking")
-            else:
-                self.set_state("idle")
+            if reset_time is None:
+                if self.detector.shakes > 0:
+                    self.set_state("shaking")
+                else:
+                    self.set_state("idle")
 
-            if self.detector.is_ready():
+            if self.detector.is_ready() and reset_time is None:
                 self.set_state("throw_prep")
 
                 # --- NEW: notify that the handshake sequence finished ---
@@ -400,9 +400,9 @@ class RPSController:
                     }
                     self.arm.send_json(payload)
                     self.set_state("thrown")
-                    # brief freeze to show result, then reset
+                    # brief freeze to show result, then reset after delay
                     vote_window.clear()
-                    self.detector.reset()
+                    reset_time = time.time() + 1.5
 
             # HUD overlay
             hud = [
@@ -421,6 +421,17 @@ class RPSController:
                 key = cv2.waitKey(1) & 0xFF
                 if key == 27 or key == ord('q'):
                     break
+                elif key == ord(' '):
+                    self.detector.reset()
+                    vote_window.clear()
+                    reset_time = None
+                    self.arm.send_json({
+                        "cmd": "info",
+                        "message": "Handshake count reset",
+                        "ts": now_ts(),
+                    })
+                    prev_shakes = 0
+                    self.set_state("idle")
 
         self.cap.release()
         cv2.destroyAllWindows()
