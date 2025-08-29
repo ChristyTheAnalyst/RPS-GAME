@@ -505,8 +505,9 @@ class RPSApp:
         hovered = self.btn_back.collidepoint(mx,my)
         pygame.draw.rect(self.screen, (240,240,240) if hovered else (220,220,220), self.btn_back, border_radius=12)
         pygame.draw.rect(self.screen, (80,80,80), self.btn_back, width=2, border_radius=12)
-        back_label = self.font_small.render("← Back", True, (30,30,30))
-        self.screen.blit(back_label, (self.btn_back.x + 16, self.btn_back.y + 10))
+        back_label = self.font_small.render("Back", True, (30,30,30))
+        back_rect = back_label.get_rect(center=self.btn_back.center)
+        self.screen.blit(back_label, back_rect)
 
         # HUD
         g = self.cam.get_gesture()
