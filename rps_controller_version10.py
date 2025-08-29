@@ -322,12 +322,12 @@ class RPSApp:
 
         # flow variables
         self.countdown_start_t = None
-        self.sent_at_one = False
         self.predicted_for_robot = None  # robot move sent at screen3 (difficulty-based)
         self.user_gesture_at_throw = None
         self.words = ["ROCK", "PAPER", "SCISSOR"]
         self.word_times = []
         self.go_time_start = None  # brief "Go" flash
+        self.result_delay_start = None
 
         # fun wishes
         self.goodluck_lines = [
@@ -355,10 +355,10 @@ class RPSApp:
         random_gradient(self.screen_bg)
         if name == "screen3":
             self.countdown_start_t = time.time()
-            self.sent_at_one = False
             self.user_gesture_at_throw = None
             self.predicted_for_robot = None
             self.go_time_start = None
+            self.result_delay_start = None
             if hasattr(self, "_updated_history"):
                 delattr(self, "_updated_history")
         elif name == "screen4":
@@ -366,6 +366,7 @@ class RPSApp:
             dt = 2.2 / len(self.words)
             self.word_times = [(self.words[i], t0 + i*dt, t0 + (i+1)*dt) for i in range(len(self.words))]
             self.current_wish = random.choice(self.goodluck_lines)
+            self.result_delay_start = None
         elif name == "screen5":
             pass
 
@@ -505,27 +506,16 @@ class RPSApp:
             if count > 0:
                 draw_center_text(self.screen, str(count), self.font_big, y=self.screen.get_height()//2)
             else:
-                # trigger "Go" phase
+                # trigger "Go" phase and send handshake
                 self.go_time_start = time.time()
-
-        # When countdown hits 1 (remaining between 1 and <2), send TCP with chosen robot move (difficulty-based)
-        if 1.0 <= remaining < 2.0 and not self.sent_at_one:
-            # Snapshot player's CURRENT guess (for result)
-            self.user_gesture_at_throw = self.cam.get_gesture()
-
-            # Decide robot move per difficulty
-            robot_move = self.choose_robot_move()
-            self.predicted_for_robot = robot_move
-
-            payload = {
-                "cmd": "start_handshake",
-                "gesture": robot_move,       # backward compatible key
-                "robot_move": robot_move,    # explicit key
-                "difficulty": self.difficulty,
-                "ts": time.strftime("%Y-%m-%d %H:%M:%S"),
-            }
-            self.arm.send_json(payload)
-            self.sent_at_one = True
+                robot_move = self.choose_robot_move()
+                self.predicted_for_robot = robot_move
+                payload = {
+                    "status": "start_handshake",
+                    "predicted_robot_move": robot_move,
+                    "difficulty": self.difficulty,
+                }
+                self.arm.send_json(payload)
 
         # Show "Go" for a short moment, then advance
         if self.go_time_start is not None:
@@ -546,7 +536,13 @@ class RPSApp:
         if active is not None:
             draw_center_text(self.screen, active, self.font_big, y=self.screen.get_height()//2)
         else:
-            self.goto("screen5")
+            if self.result_delay_start is None:
+                self.result_delay_start = time.time()
+                self.user_gesture_at_throw = self.cam.get_gesture()
+            if time.time() - self.result_delay_start < 1.0:
+                draw_center_text(self.screen, self.words[-1], self.font_big, y=self.screen.get_height()//2)
+            else:
+                self.goto("screen5")
 
         # Fun random good-luck line at the bottom
         wish = self.current_wish
