@@ -558,7 +558,7 @@ class RPSApp:
             if self.result_delay_start is None:
                 self.result_delay_start = time.time()
                 self.user_gesture_at_throw = self.cam.get_gesture()
-            if time.time() - self.result_delay_start < 1.0:
+            if time.time() - self.result_delay_start < 0.5:
                 draw_center_text(self.screen, self.words[-1], self.font_big, y=self.screen.get_height()//2)
             else:
                 self.goto("screen5")
