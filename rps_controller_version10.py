@@ -314,8 +314,13 @@ class RPSApp:
         self.btn_start = pygame.Rect(420, 360, 160, 60)
         self.btn_back = pygame.Rect(20, 20, 120, 44)  # screen2 back
 
-        self.btn_playagain = pygame.Rect(360, 480, 200, 56)
-        self.btn_home = pygame.Rect(580, 480, 200, 56)
+        # Center the "Play again" and "Home" buttons horizontally
+        btn_w, btn_h = 200, 56
+        btn_gap = 20
+        start_x = (self.screen.get_width() - (btn_w * 2 + btn_gap)) // 2
+        btn_y = 480
+        self.btn_playagain = pygame.Rect(start_x, btn_y, btn_w, btn_h)
+        self.btn_home = pygame.Rect(start_x + btn_w + btn_gap, btn_y, btn_w, btn_h)
         self.popup_active = False
         self.btn_yes = pygame.Rect(350, 340, 120, 50)
         self.btn_no = pygame.Rect(530, 340, 120, 50)
