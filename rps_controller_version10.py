@@ -147,6 +147,7 @@ class CameraWorker(threading.Thread):
         self.running = False
         self.vote_window = deque(maxlen=7)  # ~200ms @ 30fps
         self.last_guess = None
+        self.last_frame = None
         self.lock = threading.Lock()
 
         try:
@@ -176,6 +177,8 @@ class CameraWorker(threading.Thread):
             if not ok:
                 time.sleep(0.01)
                 continue
+            with self.lock:
+                self.last_frame = frame.copy()
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             res = self.hands.process(rgb)
             h, w = frame.shape[:2]
@@ -197,6 +200,12 @@ class CameraWorker(threading.Thread):
                             self.last_guess = None
 
         self.cap.release()
+
+    def get_frame(self):
+        with self.lock:
+            if self.last_frame is None:
+                return None
+            return self.last_frame.copy()
 
     def get_gesture(self):
         with self.lock:
@@ -328,6 +337,7 @@ class RPSApp:
         self.words = ["ROCK", "PAPER", "SCISSOR"]
         self.word_times = []
         self.go_time_start = None  # brief "Go" flash
+        self.screen5_enter_t = None
 
         # fun wishes
         self.goodluck_lines = [
@@ -367,7 +377,7 @@ class RPSApp:
             self.word_times = [(self.words[i], t0 + i*dt, t0 + (i+1)*dt) for i in range(len(self.words))]
             self.current_wish = random.choice(self.goodluck_lines)
         elif name == "screen5":
-            pass
+            self.screen5_enter_t = time.time()
 
     # -------------- Difficulty Logic --------------
     def choose_robot_move(self) -> str:
@@ -534,6 +544,7 @@ class RPSApp:
                 self.goto("screen4")
 
         # No predicted gesture HUD here (per request).
+        self.render_camera_small()
 
     def render_screen4(self):
         now = time.time()
@@ -553,6 +564,7 @@ class RPSApp:
         w_rend = self.font_body.render(wish, True, (245,245,245))
         w_rect = w_rend.get_rect(center=(self.screen.get_width()//2, 520))
         self.screen.blit(w_rend, w_rect)
+        self.render_camera_small()
 
     def render_screen5(self):
         draw_center_text(self.screen, "Who WON?", self.font_h1, y=80)
@@ -620,6 +632,19 @@ class RPSApp:
 
             draw_button(self.screen, self.btn_yes, "Yes", self.font_body, self.btn_yes.collidepoint(mx,my))
             draw_button(self.screen, self.btn_no, "No", self.font_body, self.btn_no.collidepoint(mx,my))
+
+        if self.screen5_enter_t and (time.time() - self.screen5_enter_t) < 3.0:
+            self.render_camera_small()
+
+    def render_camera_small(self, pos=(20,20), size=(320,240)):
+        frame = self.cam.get_frame()
+        if frame is None:
+            return
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frame = cv2.resize(frame, size)
+        frame = np.fliplr(frame)
+        surface = pygame.surfarray.make_surface(frame.swapaxes(0,1))
+        self.screen.blit(surface, pos)
 
 # ------------------------- CLI -------------------------
 
