@@ -143,10 +143,11 @@ class CameraWorker(threading.Thread):
         super().__init__(daemon=True)
         self.camera_index = camera_index
         self.cap = None
-              
+
         self.running = False
         self.vote_window = deque(maxlen=7)  # ~200ms @ 30fps
         self.last_guess = None
+        self.last_frame = None
         self.lock = threading.Lock()
 
         try:
@@ -176,6 +177,8 @@ class CameraWorker(threading.Thread):
             if not ok:
                 time.sleep(0.01)
                 continue
+            with self.lock:
+                self.last_frame = frame.copy()
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             res = self.hands.process(rgb)
             h, w = frame.shape[:2]
@@ -201,6 +204,10 @@ class CameraWorker(threading.Thread):
     def get_gesture(self):
         with self.lock:
             return self.last_guess
+
+    def get_frame(self):
+        with self.lock:
+            return None if self.last_frame is None else self.last_frame.copy()
 
     def stop(self):
         self.running = False
@@ -333,6 +340,7 @@ class RPSApp:
         self.word_times = []
         self.go_time_start = None  # brief "Go" flash
         self.result_delay_start = None
+        self.screen5_start_t = None
 
         # fun wishes
         self.goodluck_lines = [
@@ -373,7 +381,7 @@ class RPSApp:
             self.current_wish = random.choice(self.goodluck_lines)
             self.result_delay_start = None
         elif name == "screen5":
-            pass
+            self.screen5_start_t = time.time()
 
     # -------------- Difficulty Logic --------------
     def choose_robot_move(self) -> str:
@@ -426,6 +434,9 @@ class RPSApp:
                 self.render_screen4()
             elif self.current_screen == "screen5":
                 self.render_screen5()
+
+            if self.should_show_camera():
+                self.draw_camera_preview()
 
             pygame.display.flip()
             self.clock.tick(60)
@@ -621,6 +632,23 @@ class RPSApp:
 
             draw_button(self.screen, self.btn_yes, "Yes", self.font_body, self.btn_yes.collidepoint(mx,my))
             draw_button(self.screen, self.btn_no, "No", self.font_body, self.btn_no.collidepoint(mx,my))
+
+    def should_show_camera(self):
+        if self.current_screen in ("screen3", "screen4"):
+            return True
+        if self.current_screen == "screen5" and self.screen5_start_t is not None:
+            if time.time() - self.screen5_start_t < 3.0:
+                return True
+        return False
+
+    def draw_camera_preview(self):
+        frame = self.cam.get_frame()
+        if frame is None:
+            return
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frame = cv2.resize(frame, (200,150))
+        surf = pygame.image.frombuffer(frame.tobytes(), (200,150), "RGB")
+        self.screen.blit(surf, (20,20))
 
 # ------------------------- CLI -------------------------
 
