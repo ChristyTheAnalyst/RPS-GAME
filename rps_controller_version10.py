@@ -364,6 +364,12 @@ class RPSApp:
 
     # -------------- Navigation --------------
     def goto(self, name):
+        if name == "screen1":
+            self.player_history = {"wins": 0, "losses": 0, "draws": 0, "rounds": 0}
+            self.player_moves.clear()
+            self.last_player_move = None
+            self.predictor = MarkovPredictor()
+
         self.current_screen = name
         random_gradient(self.screen_bg)
         if name == "screen3":
@@ -470,10 +476,6 @@ class RPSApp:
                     self.goto("screen3")  # keep history
                 elif self.btn_no.collidepoint(pos):
                     self.popup_active = False
-                    self.player_history = {"wins": 0, "losses": 0, "draws": 0, "rounds": 0}
-                    self.player_moves.clear()
-                    self.last_player_move = None
-                    self.predictor = MarkovPredictor()  # reset model
                     self.goto("screen1")
             else:
                 if self.btn_playagain.collidepoint(pos):
