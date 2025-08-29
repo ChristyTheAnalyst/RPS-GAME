@@ -612,8 +612,27 @@ class RPSApp:
         draw_center_text(self.screen, result, self.font_h1, color=res_color, y=330)
 
         # Stats
-        stats = f"Wins: {self.player_history['wins']}   Losses: {self.player_history['losses']}   Draws: {self.player_history['draws']}   Rounds: {self.player_history['rounds']}"
-        draw_center_text(self.screen, stats, self.font_body, y=380)
+        rounds = self.player_history['rounds']
+        wins = self.player_history['wins']
+        losses = self.player_history['losses']
+        draws = self.player_history['draws']
+        robot_wins = losses
+        robot_losses = wins
+        robot_draws = draws
+
+        draw_center_text(self.screen, f"Rounds: {rounds}", self.font_body, y=380)
+        draw_center_text(
+            self.screen,
+            f"Player [Wins: {wins}  Losses: {losses}  Draws: {draws}]",
+            self.font_body,
+            y=410,
+        )
+        draw_center_text(
+            self.screen,
+            f"Robotic Arm [Wins: {robot_wins}  Losses: {robot_losses}  Draws: {robot_draws}]",
+            self.font_body,
+            y=440,
+        )
 
         # Buttons
         mx, my = pygame.mouse.get_pos()
